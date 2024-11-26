@@ -1,60 +1,74 @@
 import json
 import logging
 from channels.generic.websocket import AsyncWebsocketConsumer
+import magic
+from slugify import slugify
 
-# Get a logger instance for Django logs
-logger = logging.getLogger("django")
+# Get a logger instance
+logger = logging.getLogger('django')
+
+ALLOWED_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif', 'pdf', 'txt']
+
+def is_allowed_file(filename):
+    """Ensure the file extension is allowed"""
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+def sanitize_filename(filename):
+    """Sanitize file name to prevent path traversal"""
+    return slugify(filename)
+
+def is_safe_file(file):
+    """Check file's MIME type for safety"""
+    file_type = magic.from_buffer(file.read(1024), mime=True)
+    logger.debug(f"Detected file type: {file_type}")
+    return file_type in ['image/jpeg', 'image/png', 'application/pdf', 'text/plain']
 
 class FileConsumer(AsyncWebsocketConsumer):
     async def connect(self):
-        # Log the WebSocket connection event (only if necessary)
-        logger.info("New WebSocket connection established")
-
-        # Accept the WebSocket connection
+        """Accept WebSocket connection"""
         await self.accept()
 
     async def disconnect(self, close_code):
-        # Log WebSocket disconnection event (if important)
-        logger.info(f"WebSocket disconnected with close code: {close_code}")
+        """Handle WebSocket disconnection"""
+        logger.info(f"Disconnected with code {close_code}")
 
     async def receive(self, text_data):
-        # Log a shortened version of the data or important metadata only
-        if len(text_data) > 200:  # Only log if the data is small enough
-            logger.debug("Received large message, logging truncated version")
-            logger.debug("Received data (first 200 chars): %s", text_data[:200])
-        else:
-            logger.debug("Received small message: %s", text_data)
+        """Handle received data and process file information"""
+        logger.debug("Received data: %s", text_data)
 
+        # Handle incoming data from the client
         try:
-            # Handle the incoming data (parse the JSON)
             data = json.loads(text_data)
+            file_data = data.get("file", {})
+            file_name = file_data.get("name", "Unknown File Name")
+
+            # Sanitize filename and check for file extension
+            file_name = sanitize_filename(file_name)
+
+            logger.debug(f"Sanitized file name: {file_name}")
             
-            # Log specific key data or important fields
-            if "file" in data:
-                file_data = data["file"]
-                logger.debug("Received file data: %s", json.dumps(file_data, ensure_ascii=False, indent=2))
+            if not is_allowed_file(file_name):
+                logger.error(f"File extension not allowed: {file_name}")
+                await self.send(text_data=json.dumps({'error': 'Invalid file extension not in allowed extensions: {allowed}'.format(allowed=' , '.join(ALLOWED_EXTENSIONS))}))
+                return
 
-            # Log the presence of file name, but do not log the entire file content if large
-            file_name = data.get("file", {}).get("name", "Unknown File Name")
-            logger.debug("File name: %s", file_name)
+            # Read and validate file content for security (e.g., using magic)
+            file = file_data.get("file")
+            if not is_safe_file(file):
+                logger.error("Malicious file content detected.")
+                await self.send(text_data=json.dumps({'error': 'Unsafe file content'}))
+                return
 
-            # File extension (log only this important info)
-            file_extension = file_name.split('.')[-1] if '.' in file_name else "Unknown Extension"
-            logger.debug("File extension: %s", file_extension)
+            # If everything is safe, respond with the file's extension
+            file_extension = file_name.split('.')[-1]
+            logger.info(f"File extension: {file_extension}")
 
-            # Send the response back to the client
             response = {
                 'file_name': file_name,
                 'file_extension': file_extension
             }
             await self.send(text_data=json.dumps(response))
 
-            # Log that the response was sent
-            logger.info("Response sent to client: %s", json.dumps(response, ensure_ascii=False, indent=2))
-
-        except json.JSONDecodeError as e:
-            # Log only error-level logs if the JSON is malformed
-            logger.error("Failed to decode JSON data: %s", str(e))
-        except Exception as e:
-            # Log only unexpected exceptions at error level with the traceback
-            logger.exception("An unexpected error occurred while processing the message: %s", str(e))
+        except json.JSONDecodeError:
+            logger.error("Failed to decode JSON data")
+            await self.send(text_data=json.dumps({'error': 'Invalid JSON data'}))

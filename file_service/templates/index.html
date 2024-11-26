@@ -20,7 +20,13 @@
 
     socket.onmessage = function(e) {
         const message = JSON.parse(e.data);
-        document.getElementById('response').textContent = `File extension: ${message.file_extension}`;
+        if (message.error){
+            document.getElementById('response').textContent = `Error: ${message.error}`;
+        }
+        else{
+            document.getElementById('response').textContent = `File extension: ${message.file_extension}`;
+        }
+        
     };
 
     function sendFile(file) {

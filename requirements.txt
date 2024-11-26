@@ -8,3 +8,5 @@ sqlparse==0.5.2
 typing_extensions==4.12.2
 uvicorn==0.32.1
 websockets==14.1
+python-slugify==5.0.2
+python-magic==0.4.24

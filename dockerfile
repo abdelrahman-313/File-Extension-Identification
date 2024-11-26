@@ -9,6 +9,7 @@ RUN apt-get update && apt-get install -y \
     python3.10-venv \
     build-essential \
     curl \
+    libmagic1 \ 
     && rm -rf /var/lib/apt/lists/*
 
 # Step 3: Set working directory
