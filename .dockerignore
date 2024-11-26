@@ -1,0 +1,20 @@
+# Exclude virtual environment
+venv/
+*.pyc
+__pycache__/
+
+# Exclude logs and other temp files
+*.log
+*.tmp
+*.swp
+*.swo
+*.bak
+*.pid
+
+# Exclude Docker-related files
+Dockerfile
+.dockerignore
+
+# Exclude any other unwanted files
+*.db
+*.sqlite3

@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebSocket File Upload</title>
+</head>
+<body>
+
+<h1>Upload a File</h1>
+<input type="file" id="fileInput" />
+<p id="response"></p>
+
+<script>
+    const socket = new WebSocket('ws://' + window.location.host + '/ws/file/');
+
+    socket.onopen = function(e) {
+        console.log('WebSocket connection established');
+    };
+
+    socket.onmessage = function(e) {
+        const message = JSON.parse(e.data);
+        document.getElementById('response').textContent = `File extension: ${message.file_extension}`;
+    };
+
+    function sendFile(file) {
+        const reader = new FileReader();
+        reader.onload = function(event) {
+            socket.send(JSON.stringify({
+                file: {
+                    name: file.name,
+                    content: event.target.result  // Send the file as base64 encoded content
+                }
+            }));
+        };
+        reader.readAsDataURL(file);  // This will read the file as base64 content
+    }
+
+    document.getElementById('fileInput').addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        sendFile(file);
+    });
+</script>
+
+</body>
+</html>
